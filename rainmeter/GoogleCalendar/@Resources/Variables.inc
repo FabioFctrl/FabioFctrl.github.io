@@ -1,23 +1,25 @@
 [Variables]
 ; ---------------------------------------------------------------------------
-; Il widget legge e scrive tramite le API Google (calendari + attivita').
-; Configurazione iniziale: vedi @Resources\Google\LEGGIMI.txt.
-; Vengono mostrati i calendari spuntati in "I miei calendari" / "Altri calendari"
-; su calendar.google.com, con i loro colori: niente URL da incollare.
-; Dopo aver modificato questo file: tasto destro sul widget > Aggiorna skin.
+; Rainmeter Calendar settings. After editing: right-click the widget >
+; "Refresh skin". First-time setup: README.md in the repository.
+; The widget shows the calendars ticked under "My calendars" / "Other calendars"
+; on calendar.google.com, with their colours: there are no URLs to paste.
 ; ---------------------------------------------------------------------------
 
-; Ogni quanti secondi risincronizzare (300 = 5 minuti, minimo 60).
-; Ogni sincronizzazione costa ~10 richieste alle API: vedi i limiti in Google\LEGGIMI.txt.
-RefreshSeconds=300
-; Primo giorno della settimana: 1 = lunedi', 0 = domenica.
+; Interface language: file @Resources\Lang\<Language>.inc (en, it).
+Language=en
+
+; Seconds between automatic syncs (minimum 60). Each sync costs about
+; 3 + calendars + task lists API requests: see "API usage limits" in the README.
+RefreshSeconds=60
+; First day of the week: 1 = Monday, 0 = Sunday.
 WeekStart=1
 
-; Dimensioni (pixel). L'altezza totale dipende da quante settimane ha il mese.
+; Size (pixels). The total height depends on how many weeks the month spans.
 Width=380
 CellHeight=88
 
-; Aspetto
+; Appearance
 FontFace=Segoe UI
 ColorBg=38,42,64,235
 ColorGrid=255,255,255,22
@@ -27,31 +29,31 @@ ColorOtherMonth=110,112,130,255
 ColorAccent=168,199,250,255
 ColorTodayText=20,24,40,255
 ColorButton=219,231,255,255
-; Pannelli (giorno, dettaglio, nuovo) e campi del modulo
+; Panels (day, details, new) and form fields
 ColorPanel=30,33,52,250
 ColorField=255,255,255,22
-; Sfondo delle caselle di testo: InputText applica l'alpha a tutta la casella,
-; quindi qui serve un colore pieno.
+; Background of the text boxes: InputText applies the alpha to the whole box,
+; so this must be an opaque colour.
 ColorFieldInput=50,54,78,255
 ColorDanger=214,80,80,255
-; --- Colori come su Google Calendar (valori presi dal sito, tema scuro) ---
-; L'API di Google restituisce i colori della vecchia tavolozza, piu' chiari di
-; quelli che vedi sul sito. ColorMap li converte: "colore API=colore voluto",
-; separati da ";". Un colore API si trova nelle righe C/E di Google\data.tsv.
-; ColorMap vale per le barre (eventi di tutto il giorno o di piu' giorni);
-; ColorMapTimed per il pallino degli eventi con orario, che il sito disegna con
-; una tonalita' diversa. Un colore assente da ColorMapTimed usa ColorMap.
-;   146,225,192 = calendario principale  -> barre verde chiaro / pallino verde acqua
-;    22,167,101 = Festivita' in Italia   -> verde scuro del sito
+; --- Colours as on Google Calendar (values taken from the website, dark theme) ---
+; Google's API returns colours from the old palette, lighter than what the
+; website shows. ColorMap converts them: "API colour=wanted colour", separated
+; by ";". An API colour can be found in the C/E rows of Google\data.tsv.
+; ColorMap is for bars (all-day or multi-day events); ColorMapTimed is for the
+; dot of timed events, which the website paints with a different shade. A colour
+; missing from ColorMapTimed falls back to ColorMap.
+;   146,225,192 = Google's "Sage" calendar colour -> light green bars / teal dot
+;    22,167,101 = Google's "Basil" (e.g. holidays) -> dark green
 ColorMap=146,225,192=133,173,89;22,167,101=72,145,96
 ColorMapTimed=146,225,192=85,176,128
-; Compleanni (eventi di tipo "birthday"): Google li colora a parte
+; Birthdays (events of type "birthday"): Google colours them separately
 ColorBirthday=133,173,89
-; Attivita' (Google Tasks): da fare / completate
+; Tasks (Google Tasks): to do / completed
 ColorTask=102,139,225
 ColorTaskDone=102,139,225,110
 
-; --- Valori interni gestiti dallo script: non modificarli. ---
+; --- Internal values managed by the script: do not edit. ---
 BgHeight=600
 FormTitle=
 FormDate=

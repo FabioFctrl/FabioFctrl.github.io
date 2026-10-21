@@ -1,35 +1,43 @@
-# gcal.ps1 - ponte tra la skin Rainmeter e le API Google Calendar / Google Tasks.
+# gcal.ps1 - bridge between the Rainmeter skin and the Google Calendar / Google Tasks APIs.
 #
-# La skin (GCal.lua) scrive una richiesta in un file "chiave=valore" e lancia questo
-# script tramite il plugin RunCommand. Lo script esegue l'azione, poi risincronizza
-# e scrive data.tsv, che Lua rilegge. L'ultima riga di stdout e' l'esito:
-#   OK                    tutto bene
-#   AUTH <messaggio>      serve (di nuovo) l'accesso a Google
-#   ERR <messaggio>       errore da mostrare nella riga di stato
+# The skin (GCal.lua) writes a request to a "key=value" file and runs this script
+# through the RunCommand plugin. The script performs the action, then syncs and
+# writes data.tsv, which Lua reads back. The last line of stdout is the outcome:
+#   OK                 all good
+#   AUTH <code>        a (new) Google sign-in is needed: NO_CLIENT, NO_TOKEN, EXPIRED
+#   ERR <message>      error to show in the status line
+# AUTH uses codes rather than sentences so that the skin can translate them.
 #
-# Scelte di fondo:
-#  * Windows PowerShell 5.1: e' gia' presente in ogni Windows 10/11, quindi nessuna
-#    installazione (Python, Node, librerie Google). Le API REST bastano.
-#  * Richiesta via file invece che via riga di comando: i titoli scritti dall'utente
-#    possono contenere virgolette e caratteri speciali che la riga di comando
-#    (Rainmeter -> RunCommand -> powershell.exe) altererebbe.
-#  * Output in TSV (una riga per elemento, campi separati da tab): Lua lo legge con
-#    poche righe di codice, mentre un parser JSON in Lua sarebbe molto piu' lungo.
-#  * OAuth "app desktop" con redirect su 127.0.0.1 e PKCE, come raccomanda Google
-#    per le app installate. Il listener usa TcpListener e non HttpListener perche'
-#    HttpListener su 127.0.0.1 puo' richiedere una URL ACL (diritti di admin).
-#  * Il refresh token e' salvato cifrato con DPAPI (ConvertFrom-SecureString):
-#    leggibile solo dal tuo utente Windows su questo PC.
-#  * File di sola ASCII: Windows PowerShell 5.1 legge i .ps1 senza BOM come ANSI.
+# Design notes:
+#  * Windows PowerShell 5.1: it ships with every Windows 10/11, so nothing has to
+#    be installed (Python, Node, Google libraries). The REST APIs are enough.
+#  * The request comes through a file, not the command line: titles typed by the
+#    user can contain quotes and special characters that the command line
+#    (Rainmeter -> RunCommand -> powershell.exe) would mangle.
+#  * Output is TSV (one row per item, tab-separated fields): Lua parses it in a
+#    few lines, while a JSON parser in Lua would be much longer.
+#  * OAuth "desktop app" flow with a 127.0.0.1 redirect and PKCE, as Google
+#    recommends for installed apps. The listener uses TcpListener rather than
+#    HttpListener because HttpListener on 127.0.0.1 may need a URL ACL (admin rights).
+#  * The refresh token is stored encrypted with DPAPI (ConvertFrom-SecureString):
+#    only the same Windows user on the same PC can read it.
+#  * ASCII-only file: Windows PowerShell 5.1 reads .ps1 files without a BOM as ANSI.
+#
+# data.tsv rows (tab-separated):
+#   R  from  to                                         period covered (Unix seconds)
+#   C  calendarId  r,g,b  writable  primary  name       one per calendar shown
+#   L  listId  name                                     one per task list
+#   E  calendarId  eventId  start  end  allDay  r,g,b  link  eventType  title
+#   T  listId  taskId  due  done  title
 
 param(
 	[Parameter(Mandatory = $true)][string]$RequestFile
 )
 
 $ErrorActionPreference = 'Stop'
-# Google accetta solo TLS 1.2+; .NET 4.x in PowerShell 5.1 non lo abilita sempre di default.
+# Google only accepts TLS 1.2+; .NET 4.x in PowerShell 5.1 does not always enable it by default.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-# RunCommand legge stdout come UTF-8 (OutputType=UTF8 nel .ini).
+# RunCommand reads stdout as UTF-8 (OutputType=UTF8 in the .ini).
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 
 $GoogleDir  = Join-Path (Split-Path $PSScriptRoot -Parent) 'Google'
@@ -37,20 +45,20 @@ $ClientFile = Join-Path $GoogleDir 'client_secret.json'
 $TokenFile  = Join-Path $GoogleDir 'token.dat'
 $DataFile   = Join-Path $GoogleDir 'data.tsv'
 
-# Calendar completo (lettura + scrittura eventi + elenco calendari + colori) e Tasks.
+# Full Calendar scope (read + write events + calendar list + colors) and Tasks.
 $Scopes = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/tasks'
 $CalApi  = 'https://www.googleapis.com/calendar/v3'
 $TaskApi = 'https://tasks.googleapis.com/tasks/v1'
 $Utf8NoBom = New-Object Text.UTF8Encoding($false)
 
-# Eccezione dedicata: distingue "serve un nuovo login" dagli altri errori, cosi'
-# la skin puo' mostrare il pulsante di accesso invece di un errore generico.
-class AuthRequired : Exception { AuthRequired([string]$m) : base($m) {} }
+# Dedicated exception: tells "a new sign-in is needed" apart from other errors,
+# so the skin can show the sign-in prompt instead of a generic error.
+class AuthRequired : Exception { AuthRequired([string]$code) : base($code) {} }
 
-# --------------------------------------------------------------- utilita' --
+# ---------------------------------------------------------------- helpers --
 
-# Legge il file richiesta: righe "chiave=valore", il valore e' tutto cio' che segue
-# il primo "=" (cosi' un titolo puo' contenere "=").
+# Reads the request file: "key=value" lines; the value is everything after the
+# first "=" (so a title may contain "=").
 function Read-Request([string]$path) {
 	$req = @{}
 	foreach ($line in [IO.File]::ReadAllLines($path, $Utf8NoBom)) {
@@ -61,16 +69,14 @@ function Read-Request([string]$path) {
 }
 
 function Get-Client {
-	if (-not (Test-Path $ClientFile)) {
-		throw [AuthRequired]::new('Configura Google: vedi LEGGIMI.txt')
-	}
+	if (-not (Test-Path $ClientFile)) { throw [AuthRequired]::new('NO_CLIENT') }
 	$json = Get-Content $ClientFile -Raw | ConvertFrom-Json
-	# Il file scaricato da Google ha la chiave "installed" per i client "App desktop".
+	# The file downloaded from Google has an "installed" key for "Desktop app" clients.
 	if ($json.installed) { return $json.installed }
-	throw 'client_secret.json non e'' di tipo "App desktop"'
+	throw 'client_secret.json is not a "Desktop app" client'
 }
 
-# base64url senza padding, richiesto da PKCE (RFC 7636).
+# base64url without padding, as required by PKCE (RFC 7636).
 function ConvertTo-Base64Url([byte[]]$bytes) {
 	return [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
 }
@@ -88,7 +94,7 @@ function Save-Token($obj) {
 }
 
 function Read-Token {
-	if (-not (Test-Path $TokenFile)) { throw [AuthRequired]::new('Accesso a Google non ancora fatto') }
+	if (-not (Test-Path $TokenFile)) { throw [AuthRequired]::new('NO_TOKEN') }
 	$sec = ConvertTo-SecureString (Get-Content $TokenFile -Raw).Trim()
 	$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
 	try { $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
@@ -98,21 +104,21 @@ function Read-Token {
 
 # ------------------------------------------------------------------ OAuth --
 
-# Primo accesso: apre il browser sulla pagina di consenso Google e attende il
-# redirect su http://127.0.0.1:<porta libera>/ con il codice di autorizzazione.
+# First sign-in: opens the browser on Google's consent page and waits for the
+# redirect to http://127.0.0.1:<free port>/ carrying the authorization code.
 function Invoke-Login {
 	$client = Get-Client
 
-	# Porta 0 = il sistema sceglie una porta libera (Google accetta qualunque porta di loopback).
+	# Port 0 = the OS picks a free port (Google accepts any loopback port).
 	$tcp = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
 	$tcp.Start()
 	$port = $tcp.LocalEndpoint.Port
 	$redirect = "http://127.0.0.1:$port/"
 
-	$verifier = ConvertTo-Base64Url (New-RandomBytes 48)          # 64 caratteri, nel range 43-128
+	$verifier = ConvertTo-Base64Url (New-RandomBytes 48)          # 64 characters, within 43-128
 	$sha = [Security.Cryptography.SHA256]::Create()
 	$challenge = ConvertTo-Base64Url ($sha.ComputeHash([Text.Encoding]::ASCII.GetBytes($verifier)))
-	$state = ConvertTo-Base64Url (New-RandomBytes 16)             # contro risposte non richieste
+	$state = ConvertTo-Base64Url (New-RandomBytes 16)             # protects against unsolicited responses
 
 	$q = @{
 		client_id = $client.client_id; redirect_uri = $redirect; response_type = 'code'
@@ -123,14 +129,14 @@ function Invoke-Login {
 	Start-Process ($client.auth_uri + '?' + $query)
 
 	try {
-		# 5 minuti per completare il consenso nel browser, poi si rinuncia.
+		# 5 minutes to complete the consent in the browser, then give up.
 		$accept = $tcp.AcceptTcpClientAsync()
-		if (-not $accept.Wait(300000)) { throw 'Tempo scaduto in attesa del login' }
+		if (-not $accept.Wait(300000)) { throw 'Timed out waiting for the sign-in' }
 		$conn = $accept.Result
 		$stream = $conn.GetStream()
 		$reader = New-Object IO.StreamReader($stream)
-		$requestLine = $reader.ReadLine()                           # es. "GET /?code=...&state=... HTTP/1.1"
-		$html = '<html><body style="font-family:sans-serif"><h2>Fatto.</h2>Puoi chiudere questa pagina e tornare al widget.</body></html>'
+		$requestLine = $reader.ReadLine()                           # e.g. "GET /?code=...&state=... HTTP/1.1"
+		$html = '<html><body style="font-family:sans-serif"><h2>Done.</h2>You can close this page and go back to the widget.</body></html>'
 		$body = [Text.Encoding]::UTF8.GetBytes($html)
 		$head = [Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Type: text/html; charset=utf-8`r`nContent-Length: $($body.Length)`r`nConnection: close`r`n`r`n")
 		$stream.Write($head, 0, $head.Length)
@@ -148,19 +154,19 @@ function Invoke-Login {
 			$params[$kv[0]] = [Uri]::UnescapeDataString(($kv[1] -replace '\+', ' '))
 		}
 	}
-	if ($params['error']) { throw "Accesso negato: $($params['error'])" }
-	if ($params['state'] -ne $state) { throw 'Risposta di login non valida (state)' }
+	if ($params['error']) { throw "Sign-in refused: $($params['error'])" }
+	if ($params['state'] -ne $state) { throw 'Invalid sign-in response (state)' }
 
 	$tok = Invoke-RestMethod -Method Post -Uri $client.token_uri -Body @{
 		code = $params['code']; client_id = $client.client_id; client_secret = $client.client_secret
 		redirect_uri = $redirect; grant_type = 'authorization_code'; code_verifier = $verifier
 	}
-	if (-not $tok.refresh_token) { throw 'Google non ha restituito un refresh token' }
+	if (-not $tok.refresh_token) { throw 'Google did not return a refresh token' }
 	Save-Token @{ refresh_token = $tok.refresh_token }
 }
 
-# Scambia il refresh token salvato con un access token (valido ~1 ora): costa una
-# richiesta per esecuzione ma evita di dover salvare e gestire la scadenza.
+# Exchanges the stored refresh token for an access token (valid ~1 hour). One
+# extra request per run, but no expiry bookkeeping to store and manage.
 function Get-AccessToken {
 	$client = Get-Client
 	$t = Read-Token
@@ -170,18 +176,18 @@ function Get-AccessToken {
 			refresh_token = $t.refresh_token; grant_type = 'refresh_token'
 		}
 	} catch {
-		# invalid_grant = token revocato o scaduto: va rifatto il login.
+		# invalid_grant = token revoked or expired: a new sign-in is needed.
 		if ("$_" -match 'invalid_grant') {
 			Remove-Item $TokenFile -ErrorAction SilentlyContinue
-			throw [AuthRequired]::new('Accesso scaduto o revocato: ricollega Google')
+			throw [AuthRequired]::new('EXPIRED')
 		}
 		throw
 	}
 	return $r.access_token
 }
 
-# Chiamata REST autenticata. Il corpo JSON va inviato come byte UTF-8: con una
-# stringa, PowerShell 5.1 la codificherebbe in ISO-8859-1 rovinando gli accenti.
+# Authenticated REST call. A JSON body is sent as UTF-8 bytes: given a string,
+# PowerShell 5.1 would encode it as ISO-8859-1 and break accented characters.
 function Invoke-Google([string]$method, [string]$uri, $body = $null) {
 	$p = @{ Method = $method; Uri = $uri; Headers = @{ Authorization = "Bearer $script:Access" } }
 	if ($null -ne $body) {
@@ -191,7 +197,7 @@ function Invoke-Google([string]$method, [string]$uri, $body = $null) {
 	return Invoke-RestMethod @p
 }
 
-# Scorre tutte le pagine di un elenco (nextPageToken) e restituisce gli items.
+# Walks all pages of a list (nextPageToken) and returns the items.
 function Get-AllItems([string]$uri) {
 	$all = @()
 	$token = $null
@@ -205,22 +211,22 @@ function Get-AllItems([string]$uri) {
 	return $all
 }
 
-# ------------------------------------------------------------ conversioni --
+# ------------------------------------------------------------ conversions --
 
-# "#9fe1e7" -> "159,225,231" (formato colori di Rainmeter).
+# "#9fe1e7" -> "159,225,231" (Rainmeter colour format).
 function ConvertTo-Rgb([string]$hex) {
 	$h = $hex.TrimStart('#')
 	return '{0},{1},{2}' -f [Convert]::ToInt32($h.Substring(0, 2), 16), [Convert]::ToInt32($h.Substring(2, 2), 16), [Convert]::ToInt32($h.Substring(4, 2), 16)
 }
 
-# Data "yyyy-MM-dd" -> epoch della mezzanotte LOCALE (come la calcola os.time in Lua).
+# Date "yyyy-MM-dd" -> epoch of LOCAL midnight (as Lua's os.time computes it).
 function ConvertFrom-LocalDate([string]$d) {
 	$dt = [datetime]::ParseExact($d.Substring(0, 10), 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
 	return ([DateTimeOffset]$dt).ToUnixTimeSeconds()
 }
 
-# dateTime RFC 3339 con offset -> epoch. In PS 5.1 ConvertFrom-Json lascia le date
-# come stringhe; si gestisce anche [datetime] per sicurezza.
+# RFC 3339 dateTime with offset -> epoch. In PS 5.1 ConvertFrom-Json keeps dates
+# as strings; [datetime] is handled too, just in case.
 function ConvertFrom-RfcTime($v) {
 	if ($v -is [datetime]) { return ([DateTimeOffset]$v).ToUnixTimeSeconds() }
 	return [DateTimeOffset]::Parse($v, [Globalization.CultureInfo]::InvariantCulture).ToUnixTimeSeconds()
@@ -230,7 +236,7 @@ function ConvertTo-RfcTime([long]$epoch) {
 	return [DateTimeOffset]::FromUnixTimeSeconds($epoch).ToString('yyyy-MM-ddTHH:mm:ssZ')
 }
 
-# I campi di testo non devono contenere tab/a-capo: romperebbero il formato TSV.
+# Text fields must not contain tabs/newlines: they would break the TSV format.
 function Clean([string]$s) {
 	if (-not $s) { return '' }
 	return ($s -replace '[\t\r\n]+', ' ').Trim()
@@ -238,21 +244,21 @@ function Clean([string]$s) {
 
 # ------------------------------------------------------------------- sync --
 
-# Scarica calendari, eventi (ricorrenze gia' espanse da Google: singleEvents=true)
-# e attivita' nell'intervallo [from, to) e scrive data.tsv in modo atomico.
+# Downloads calendars, events (recurrences already expanded by Google:
+# singleEvents=true) and tasks in [from, to) and writes data.tsv atomically.
 function Invoke-Sync([long]$from, [long]$to) {
 	$lines = New-Object Collections.Generic.List[string]
 	$lines.Add("R`t$from`t$to")
 	$tMin = [Uri]::EscapeDataString((ConvertTo-RfcTime $from))
 	$tMax = [Uri]::EscapeDataString((ConvertTo-RfcTime $to))
 
-	# Palette dei colori per-evento (colorId 1..11) definita da Google.
+	# Google's palette of per-event colours (colorId 1..11).
 	$palette = @{}
 	$colors = Invoke-Google 'Get' "$CalApi/colors"
 	foreach ($p in $colors.event.PSObject.Properties) { $palette[$p.Name] = ConvertTo-Rgb $p.Value.background }
 
-	# Solo i calendari spuntati nell'interfaccia di Google (selected): lo stesso
-	# insieme che vedi su calendar.google.com.
+	# Only calendars ticked in Google's UI (selected): the same set you see on
+	# calendar.google.com.
 	$cals = Get-AllItems "$CalApi/users/me/calendarList?maxResults=250&fields=nextPageToken,items(id,summary,summaryOverride,backgroundColor,accessRole,selected,primary)"
 	foreach ($c in $cals) {
 		if (-not $c.selected) { continue }
@@ -272,16 +278,17 @@ function Invoke-Sync([long]$from, [long]$to) {
 				$s = ConvertFrom-RfcTime $e.start.dateTime; $en = ConvertFrom-RfcTime $e.end.dateTime; $all = 0
 			}
 			$ec = if ($e.colorId -and $palette[$e.colorId]) { $palette[$e.colorId] } else { $color }
-			# eventType ("default", "birthday", ...) serve alla skin: Google Calendar
-			# disegna i compleanni con un colore proprio, diverso da quello del calendario.
+			# eventType ("default", "birthday", ...) is used by the skin: Google
+			# Calendar paints birthdays with their own colour, not the calendar's.
 			$etype = if ($e.eventType) { $e.eventType } else { 'default' }
 			$lines.Add("E`t$($c.id)`t$($e.id)`t$s`t$en`t$all`t$ec`t$(Clean $e.htmlLink)`t$etype`t$(Clean $e.summary)")
 		}
 	}
 
-	# Attivita': l'API tratta "due" come sola data (l'orario viene scartato da Google),
-	# quindi si usa la parte yyyy-MM-dd come giorno locale. Quelle senza scadenza non
-	# hanno un posto nel calendario e non vengono scaricate.
+	# Tasks: the API treats "due" as a date only (Google drops the time), so the
+	# yyyy-MM-dd part is used as a local day. Tasks without a due date have no
+	# place in a calendar and are not downloaded. The API does not expose
+	# repeating tasks: only the current occurrence of each one is returned.
 	$lists = Get-AllItems "$TaskApi/users/@me/lists?maxResults=100&fields=nextPageToken,items(id,title)"
 	foreach ($l in $lists) {
 		$lines.Add("L`t$($l.id)`t$(Clean $l.title)")
@@ -295,17 +302,18 @@ function Invoke-Sync([long]$from, [long]$to) {
 		}
 	}
 
-	# Scrittura atomica: Lua non deve mai leggere un file a meta'.
+	# Atomic write: Lua must never read a half-written file.
 	$tmp = "$DataFile.tmp"
 	[IO.File]::WriteAllLines($tmp, $lines, $Utf8NoBom)
 	Move-Item -Force $tmp $DataFile
 }
 
-# ----------------------------------------------------------------- azioni --
+# ---------------------------------------------------------------- actions --
 
-# Data e ora locali dal modulo ("2026-10-21", "10:30") -> stringa RFC 3339 con
-# l'offset locale. Si usa l'offset e non un fuso IANA perche' Windows conosce solo
-# i propri nomi di fuso ("W. Europe Standard Time"), che Google non accetta.
+# Local date and time from the form ("2026-10-21", "10:30") -> RFC 3339 string
+# with the local offset. An offset is used instead of an IANA time zone because
+# Windows only knows its own zone names ("W. Europe Standard Time"), which
+# Google does not accept.
 function ConvertTo-LocalRfc([string]$date, [string]$time) {
 	$dt = [datetime]::ParseExact("$date $time", 'yyyy-MM-dd HH:mm', [Globalization.CultureInfo]::InvariantCulture)
 	return ([DateTimeOffset]$dt).ToString('yyyy-MM-ddTHH:mm:sszzz')
@@ -316,7 +324,7 @@ function Invoke-Action($req) {
 		'add-event' {
 			$body = @{ summary = $req.title }
 			if ($req.allday -eq '1') {
-				# Fine esclusiva: un evento di un giorno finisce il giorno dopo.
+				# Exclusive end: a one-day event ends the next day.
 				$next = [datetime]::ParseExact($req.date, 'yyyy-MM-dd', $null).AddDays(1).ToString('yyyy-MM-dd')
 				$body.start = @{ date = $req.date }; $body.end = @{ date = $next }
 			} else {
@@ -335,14 +343,14 @@ function Invoke-Action($req) {
 			Invoke-Google 'Patch' "$TaskApi/lists/$([Uri]::EscapeDataString($req.list))/tasks/$([Uri]::EscapeDataString($req.id))" $body | Out-Null
 		}
 		'delete-event' {
-			# Per un evento ricorrente l'id e' quello della singola istanza: si elimina solo quella.
+			# For a recurring event the id is that of the single occurrence: only that one is deleted.
 			Invoke-Google 'Delete' "$CalApi/calendars/$([Uri]::EscapeDataString($req.calendar))/events/$([Uri]::EscapeDataString($req.id))" | Out-Null
 		}
 		'delete-task' {
 			Invoke-Google 'Delete' "$TaskApi/lists/$([Uri]::EscapeDataString($req.list))/tasks/$([Uri]::EscapeDataString($req.id))" | Out-Null
 		}
 		'sync' { }
-		default { throw "Azione sconosciuta: $($req.action)" }
+		default { throw "Unknown action: $($req.action)" }
 	}
 }
 
@@ -353,14 +361,14 @@ try {
 	if ($req.action -eq 'login') { Invoke-Login; $req.action = 'sync' }
 	$script:Access = Get-AccessToken
 	Invoke-Action $req
-	# Ogni azione si chiude con una sincronizzazione: la skin vede subito il risultato
-	# senza dover lanciare un secondo processo.
+	# Every action ends with a sync: the skin sees the result immediately without
+	# starting a second process.
 	Invoke-Sync ([long]$req.from) ([long]$req.to)
 	Write-Output 'OK'
 } catch [AuthRequired] {
 	Write-Output "AUTH $($_.Exception.Message)"
 } catch {
-	# Messaggio su una riga sola: Lua mostra solo l'ultima riga di stdout.
+	# Single-line message: Lua only shows the last line of stdout.
 	$msg = ($_.Exception.Message -replace '\s+', ' ')
 	if ($_.ErrorDetails.Message) {
 		try { $msg = (($_.ErrorDetails.Message | ConvertFrom-Json).error.message) -replace '\s+', ' ' } catch { }
