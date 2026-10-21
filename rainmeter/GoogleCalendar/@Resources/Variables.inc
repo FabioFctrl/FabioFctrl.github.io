@@ -34,9 +34,21 @@ ColorField=255,255,255,22
 ; quindi qui serve un colore pieno.
 ColorFieldInput=50,54,78,255
 ColorDanger=214,80,80,255
+; --- Colori come su Google Calendar (valori presi dal sito, tema scuro) ---
+; L'API di Google restituisce i colori della vecchia tavolozza, piu' chiari di
+; quelli che vedi sul sito. ColorMap li converte: "colore API=colore voluto",
+; separati da ";". Un colore API si trova nelle righe C/E di Google\data.tsv.
+; Nel widget ogni elemento e' una barra, quindi si usa il colore delle barre
+; "tutto il giorno" del sito (per gli eventi con orario il sito usa un pallino
+; di tonalita' diversa).
+;   146,225,192 = calendario principale  -> verde delle barre del sito
+;    22,167,101 = Festivita' in Italia   -> verde scuro del sito
+ColorMap=146,225,192=133,173,89;22,167,101=72,145,96
+; Compleanni (eventi di tipo "birthday"): Google li colora a parte
+ColorBirthday=133,173,89
 ; Attivita' (Google Tasks): da fare / completate
-ColorTask=66,133,244
-ColorTaskDone=66,133,244,110
+ColorTask=102,139,225
+ColorTaskDone=102,139,225,110
 
 ; --- Valori interni gestiti dallo script: non modificarli. ---
 BgHeight=600

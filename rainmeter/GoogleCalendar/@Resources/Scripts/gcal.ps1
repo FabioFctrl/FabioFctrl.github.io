@@ -263,7 +263,7 @@ function Invoke-Sync([long]$from, [long]$to) {
 		$lines.Add("C`t$($c.id)`t$color`t$writable`t$primary`t$(Clean $name)")
 
 		$evs = Get-AllItems ("$CalApi/calendars/$([Uri]::EscapeDataString($c.id))/events?singleEvents=true&maxResults=2500" +
-			"&timeMin=$tMin&timeMax=$tMax&fields=nextPageToken,items(id,status,summary,start,end,colorId,htmlLink)")
+			"&timeMin=$tMin&timeMax=$tMax&fields=nextPageToken,items(id,status,summary,start,end,colorId,htmlLink,eventType)")
 		foreach ($e in $evs) {
 			if ($e.status -eq 'cancelled') { continue }
 			if ($e.start.date) {
@@ -272,7 +272,10 @@ function Invoke-Sync([long]$from, [long]$to) {
 				$s = ConvertFrom-RfcTime $e.start.dateTime; $en = ConvertFrom-RfcTime $e.end.dateTime; $all = 0
 			}
 			$ec = if ($e.colorId -and $palette[$e.colorId]) { $palette[$e.colorId] } else { $color }
-			$lines.Add("E`t$($c.id)`t$($e.id)`t$s`t$en`t$all`t$ec`t$(Clean $e.htmlLink)`t$(Clean $e.summary)")
+			# eventType ("default", "birthday", ...) serve alla skin: Google Calendar
+			# disegna i compleanni con un colore proprio, diverso da quello del calendario.
+			$etype = if ($e.eventType) { $e.eventType } else { 'default' }
+			$lines.Add("E`t$($c.id)`t$($e.id)`t$s`t$en`t$all`t$ec`t$(Clean $e.htmlLink)`t$etype`t$(Clean $e.summary)")
 		}
 	}
 
