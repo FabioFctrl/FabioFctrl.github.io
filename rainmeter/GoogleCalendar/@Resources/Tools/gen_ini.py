@@ -7,9 +7,9 @@
 # @Resources\Lang\<Language>.inc, so the .ini never needs to be UTF-16.
 import sys
 
-# Pool sizes: must match MAX_DAYS, MAX_BARS, GRID_LINES, DAY_ROWS and BUTTONS
-# in Scripts\GCal.lua (42 = 6 weeks, the most a month can span).
-DAYS, BARS, GRID_LINES, DAY_ROWS, BUTTONS = 42, 120, 13, 8, 3
+# Pool sizes: must match MAX_DAYS, MAX_BARS, GRID_LINES, DAY_ROWS, BUTTONS and
+# DET_LINES in Scripts\GCal.lua (42 = 6 weeks, the most a month can span).
+DAYS, BARS, GRID_LINES, DAY_ROWS, BUTTONS, DET_LINES = 42, 120, 13, 8, 3, 4
 
 # Geometry of the overlay panel (day / details / new).
 # Must match PANEL_Y, PANEL_IX, ROW_Y0, ROW_H and BTN_Y in GCal.lua.
@@ -324,11 +324,15 @@ for i in range(1, DAY_ROWS + 1):
     text_meter(f'DayRowTitle{i}', IX + 104, y + 5, 'W=(#Width#-138)\nH=20\nClipString=1\nFontSize=10\n', 'Panel | PDay')
 text_meter('DayEmpty', IX, ROW_Y0 + 6, 'FontSize=10\nFontColor=#ColorDim#\n', 'Panel | PDay')
 
-# --- details
+# --- details: date/time, then up to DET_LINES rows (Meet link, location, calendar
+# + creator, description/notes), each an icon + text + optional small subtitle.
+# GCal.lua fills only the rows that have data and sets their Y and height.
 text_meter('DetWhen', IX, PY + 66, 'W=(#Width#-48)\nH=40\nClipString=2\nFontSize=10\nFontColor=#ColorDim#\n', 'Panel | PDetail')
-w(f"[DetDot]\nMeter=Shape\nX={IX}\nY={PY + 112}\nShape=Ellipse 5,5,5 | StrokeWidth 0\nHidden=1\nGroup=Panel | PDetail\n\n")
-text_meter('DetCal', IX + 16, PY + 106, 'W=(#Width#-64)\nH=20\nClipString=1\nFontSize=10\n', 'Panel | PDetail')
-text_meter('DetInfo', IX, PY + 140, 'W=(#Width#-48)\nH=60\nClipString=2\nFontSize=9\nFontColor=#ColorDim#\n', 'Panel | PDetail')
+for i in range(1, DET_LINES + 1):
+    text_meter(f'DetIcon{i}', IX + 7, 0, 'FontSize=11\nFontColor=#ColorDim#\n', 'Panel | PDetail', 'StyleIcon')
+    text_meter(f'DetText{i}', IX + 26, 0, 'W=(#Width#-74)\nClipString=2\nFontSize=10\nSolidColor=0,0,0,1\n', 'Panel | PDetail')
+    text_meter(f'DetSub{i}', IX + 26, 0, 'W=(#Width#-74)\nH=16\nClipString=1\nFontSize=8\nFontColor=#ColorDim#\n', 'Panel | PDetail')
+text_meter('DetInfo', IX, PY + 312, 'W=(#Width#-48)\nH=18\nClipString=1\nFontSize=9\nFontColor=#ColorDim#\n', 'Panel | PDetail')
 
 # --- "new" form
 for name, label, x, wdt in (('ChipEvent', '#TxtChipEvent#', IX, 84), ('ChipTask', '#TxtTask#', IX + 92, 96)):

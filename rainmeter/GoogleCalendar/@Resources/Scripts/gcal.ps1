@@ -27,8 +27,9 @@
 #   R  from  to                                         period covered (Unix seconds)
 #   C  calendarId  r,g,b  writable  primary  name       one per calendar shown
 #   L  listId  name                                     one per task list
-#   E  calendarId  eventId  start  end  allDay  r,g,b  link  eventType  title
-#   T  listId  taskId  due  done  title
+#   E  calendarId  eventId  start  end  allDay  r,g,b  link  eventType  location  meetLink  creator  description  title
+#   T  listId  taskId  due  done  notes  title
+# The title is always the last field.
 
 param(
 	[Parameter(Mandatory = $true)][string]$RequestFile
@@ -242,6 +243,25 @@ function Clean([string]$s) {
 	return ($s -replace '[\t\r\n]+', ' ').Trim()
 }
 
+# Event descriptions may contain HTML (Google's editor writes <br>, <a>, <b>...):
+# keep only the text, decode entities, and cap the length because the widget
+# shows at most a few lines.
+function Clean-Description([string]$s) {
+	if (-not $s) { return '' }
+	$t = $s -replace '(?i)<br\s*/?>|</p>|</li>', ' ' -replace '<[^>]+>', ''
+	$t = Clean ([Net.WebUtility]::HtmlDecode($t))
+	if ($t.Length -gt 400) { $t = $t.Substring(0, 400) + '...' }
+	return $t
+}
+
+# "Created by" as Google shows it: the name if known, otherwise the email.
+# Empty when you created the event yourself (Google does not show it either).
+function Get-Creator($e) {
+	if (-not $e.creator -or $e.creator.self) { return '' }
+	if ($e.creator.displayName) { return Clean $e.creator.displayName }
+	return Clean $e.creator.email
+}
+
 # ------------------------------------------------------------------- sync --
 
 # Downloads calendars, events (recurrences already expanded by Google:
@@ -269,7 +289,7 @@ function Invoke-Sync([long]$from, [long]$to) {
 		$lines.Add("C`t$($c.id)`t$color`t$writable`t$primary`t$(Clean $name)")
 
 		$evs = Get-AllItems ("$CalApi/calendars/$([Uri]::EscapeDataString($c.id))/events?singleEvents=true&maxResults=2500" +
-			"&timeMin=$tMin&timeMax=$tMax&fields=nextPageToken,items(id,status,summary,start,end,colorId,htmlLink,eventType)")
+			"&timeMin=$tMin&timeMax=$tMax&fields=nextPageToken,items(id,status,summary,start,end,colorId,htmlLink,eventType,location,hangoutLink,creator,description)")
 		foreach ($e in $evs) {
 			if ($e.status -eq 'cancelled') { continue }
 			if ($e.start.date) {
@@ -281,7 +301,8 @@ function Invoke-Sync([long]$from, [long]$to) {
 			# eventType ("default", "birthday", ...) is used by the skin: Google
 			# Calendar paints birthdays with their own colour, not the calendar's.
 			$etype = if ($e.eventType) { $e.eventType } else { 'default' }
-			$lines.Add("E`t$($c.id)`t$($e.id)`t$s`t$en`t$all`t$ec`t$(Clean $e.htmlLink)`t$etype`t$(Clean $e.summary)")
+			$lines.Add("E`t$($c.id)`t$($e.id)`t$s`t$en`t$all`t$ec`t$(Clean $e.htmlLink)`t$etype`t$(Clean $e.location)`t" +
+				"$(Clean $e.hangoutLink)`t$(Get-Creator $e)`t$(Clean-Description $e.description)`t$(Clean $e.summary)")
 		}
 	}
 
@@ -293,12 +314,12 @@ function Invoke-Sync([long]$from, [long]$to) {
 	foreach ($l in $lists) {
 		$lines.Add("L`t$($l.id)`t$(Clean $l.title)")
 		$tasks = Get-AllItems ("$TaskApi/lists/$([Uri]::EscapeDataString($l.id))/tasks?maxResults=100&showCompleted=true&showHidden=true" +
-			"&dueMin=$tMin&dueMax=$tMax&fields=nextPageToken,items(id,title,due,status,deleted)")
+			"&dueMin=$tMin&dueMax=$tMax&fields=nextPageToken,items(id,title,due,status,deleted,notes)")
 		foreach ($t in $tasks) {
 			if ($t.deleted -or -not $t.due) { continue }
 			$dueStr = if ($t.due -is [datetime]) { $t.due.ToUniversalTime().ToString('yyyy-MM-dd') } else { $t.due }
 			$done = if ($t.status -eq 'completed') { 1 } else { 0 }
-			$lines.Add("T`t$($l.id)`t$($t.id)`t$(ConvertFrom-LocalDate $dueStr)`t$done`t$(Clean $t.title)")
+			$lines.Add("T`t$($l.id)`t$($t.id)`t$(ConvertFrom-LocalDate $dueStr)`t$done`t$(Clean-Description $t.notes)`t$(Clean $t.title)")
 		}
 	}
 

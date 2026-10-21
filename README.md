@@ -12,7 +12,7 @@ and Google Tasks**, and lets you create, complete and delete events and tasks wi
 - Month grid with all the calendars ticked in your Google account, in Google's colours.
   All-day and multi-day events are bars, timed events are a dot, as on calendar.google.com.
 - Google Tasks with a due date (○ to do, ✓ completed).
-- Click a day → list of that day; click an item → details, **Open**, **Delete**, **Complete** (tasks).
+- Click a day → list of that day; click an item → details as on Google (time, Google Meet link, location with a link to Maps, calendar, creator, description or task notes) and **Open**, **Delete**, **Complete** (tasks).
 - **+** button → create an event (title, date, time or all day, calendar) or a task (title, date, list).
 - Automatic sync (every minute by default) plus a **Refresh** button.
 - English and Italian interface, easy to translate.

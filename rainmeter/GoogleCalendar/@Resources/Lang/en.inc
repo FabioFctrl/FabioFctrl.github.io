@@ -75,3 +75,5 @@ TxtEndBeforeStart=The end must be after the start
 TxtAuthNoClient=Set up Google: see README
 TxtAuthNoToken=Not connected to Google
 TxtAuthExpired=Google access expired or revoked
+TxtJoinMeet=Join with Google Meet
+TxtCreatedBy=Created by: %s

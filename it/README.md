@@ -12,7 +12,7 @@ crea, completa ed elimina eventi e attività senza aprire il browser.
 - Griglia del mese con tutti i calendari spuntati nel tuo account Google, con i colori di Google.
   Eventi di tutto il giorno e di più giorni come barre, eventi con orario come pallino, come su calendar.google.com.
 - Attività di Google Tasks con scadenza (○ da fare, ✓ completata).
-- Clic su un giorno → elenco del giorno; clic su un elemento → dettaglio, **Apri**, **Elimina**, **Completa** (attività).
+- Clic su un giorno → elenco del giorno; clic su un elemento → dettaglio come su Google (orario, link Google Meet, luogo con link a Maps, calendario, chi l'ha creato, descrizione o note dell'attività) e **Apri**, **Elimina**, **Completa** (attività).
 - Pulsante **+** → nuovo evento (titolo, data, orario o tutto il giorno, calendario) o nuova attività (titolo, data, elenco).
 - Sincronizzazione automatica (ogni minuto di default) e pulsante **Aggiorna**.
 - Interfaccia in italiano o inglese, facilmente traducibile.
