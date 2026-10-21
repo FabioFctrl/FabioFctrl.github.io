@@ -38,12 +38,13 @@ ColorDanger=214,80,80,255
 ; L'API di Google restituisce i colori della vecchia tavolozza, piu' chiari di
 ; quelli che vedi sul sito. ColorMap li converte: "colore API=colore voluto",
 ; separati da ";". Un colore API si trova nelle righe C/E di Google\data.tsv.
-; Nel widget ogni elemento e' una barra, quindi si usa il colore delle barre
-; "tutto il giorno" del sito (per gli eventi con orario il sito usa un pallino
-; di tonalita' diversa).
-;   146,225,192 = calendario principale  -> verde delle barre del sito
+; ColorMap vale per le barre (eventi di tutto il giorno o di piu' giorni);
+; ColorMapTimed per il pallino degli eventi con orario, che il sito disegna con
+; una tonalita' diversa. Un colore assente da ColorMapTimed usa ColorMap.
+;   146,225,192 = calendario principale  -> barre verde chiaro / pallino verde acqua
 ;    22,167,101 = Festivita' in Italia   -> verde scuro del sito
 ColorMap=146,225,192=133,173,89;22,167,101=72,145,96
+ColorMapTimed=146,225,192=85,176,128
 ; Compleanni (eventi di tipo "birthday"): Google li colora a parte
 ColorBirthday=133,173,89
 ; Attivita' (Google Tasks): da fare / completate
