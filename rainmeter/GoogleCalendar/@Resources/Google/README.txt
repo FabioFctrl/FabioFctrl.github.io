@@ -12,5 +12,6 @@ What goes in this folder:
                        Do not copy it to another PC: sign in again there.
    data.tsv            local copy of events and tasks, rewritten at every sync
    request.txt         last request from the widget to the script (temporary)
+   last-error.txt      full text of the last error, when the widget shows one
 
 To revoke access: https://myaccount.google.com/permissions

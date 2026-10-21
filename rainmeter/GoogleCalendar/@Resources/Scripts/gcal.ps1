@@ -36,6 +36,15 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# The script inherits Rainmeter's environment. If Rainmeter was started from
+# PowerShell 7, PSModulePath lists PowerShell 7's module folders first and
+# Windows PowerShell 5.1 then fails to load Microsoft.PowerShell.Security
+# (ConvertTo-SecureString). Reset it to Windows PowerShell's standard folders.
+$env:PSModulePath = @(
+	(Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules'),
+	(Join-Path $env:ProgramFiles 'WindowsPowerShell\Modules'),
+	(Join-Path $PSHOME 'Modules')
+) -join ';'
 # Google only accepts TLS 1.2+; .NET 4.x in PowerShell 5.1 does not always enable it by default.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 # RunCommand reads stdout as UTF-8 (OutputType=UTF8 in the .ini).
@@ -394,5 +403,11 @@ try {
 	if ($_.ErrorDetails.Message) {
 		try { $msg = (($_.ErrorDetails.Message | ConvertFrom-Json).error.message) -replace '\s+', ' ' } catch { }
 	}
+	# The widget only has room for one short line: the full error (with the line of
+	# the script where it happened) goes to last-error.txt for troubleshooting.
+	try {
+		$detail = "$(Get-Date -Format s)`r`n$($_ | Out-String)`r`n$($_.ScriptStackTrace)"
+		[IO.File]::WriteAllText((Join-Path $GoogleDir 'last-error.txt'), $detail, $Utf8NoBom)
+	} catch { }
 	Write-Output "ERR $msg"
 }
