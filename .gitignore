@@ -1,0 +1,9 @@
+# Repository PUBBLICO: credenziali e dati personali non devono mai finirci.
+# client_secret*.json  client OAuth Google (si copia a mano tra i PC)
+# token.dat            refresh token cifrato con DPAPI (valido solo sul PC che l'ha creato)
+# data.tsv, request.txt  eventi/attivita' scaricati e ultima richiesta del widget
+**/Google/client_secret*.json
+**/Google/token.dat
+**/Google/data.tsv
+**/Google/data.tsv.tmp
+**/Google/request.txt

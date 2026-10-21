@@ -1,0 +1,4 @@
+# Progetto solo Windows: i file si salvano esattamente come sono, senza
+# conversioni di fine riga. Serve soprattutto a GCal.lua, che Rainmeter vuole in
+# UTF-16 LE: deve arrivare identico sia con "git clone" sia con "Download ZIP".
+* -text
