@@ -77,16 +77,26 @@ if ($req.mode -eq 'delete') {
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
-# Rainmeter positions skins in physical pixels. Declaring the process DPI-aware
-# makes Windows Forms use the same coordinates instead of scaled ones, so the
-# editor lands exactly on the note at any display scaling.
 Add-Type -Namespace Native -Name User32 -MemberDefinition @'
-[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr hWnd);
 [DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindow(string cls, string title);
+[DllImport("user32.dll")] public static extern System.IntPtr GetWindowDpiAwarenessContext(System.IntPtr hWnd);
+[DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr ctx);
 '@
-[void][Native.User32]::SetProcessDPIAware()
+# Same pixels as Rainmeter. Rainmeter 4.5 is not DPI-aware: at 125 % display
+# scaling Windows enlarges its windows and its coordinates (CURRENTCONFIGX,
+# sizes) are "virtual" 96-dpi pixels, 1/1.25 of the real ones. This thread
+# takes the DPI mode of a Rainmeter skin window, so the editor's position, size
+# and font are scaled exactly like the note under it - and keep matching if a
+# future Rainmeter becomes DPI-aware. (Declaring this process DPI-aware, as an
+# earlier version did, put the editor at real pixels: shifted and too small.)
+# Windows 10 1607 or later; without a skin window nothing is changed.
+$rmWindow = [Native.User32]::FindWindow('RainmeterMeterWindow', [NullString]::Value)
+if ($rmWindow -ne [IntPtr]::Zero) {
+	[void][Native.User32]::SetThreadDpiAwarenessContext([Native.User32]::GetWindowDpiAwarenessContext($rmWindow))
+}
 
 $isTitle = $req.mode -eq 'title'
 Remove-Item -LiteralPath $req.close -ErrorAction SilentlyContinue   # leftover from a previous run

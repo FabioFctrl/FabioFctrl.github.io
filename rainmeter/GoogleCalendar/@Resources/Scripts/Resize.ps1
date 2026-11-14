@@ -11,7 +11,8 @@
 #
 # Request file ("key=value" lines):
 #   edge   l, r, t, b, tl, tr, bl or br: which side or corner is dragged
-#   x, y, w, h   the skin's current rectangle (screen pixels)
+#   x, y, w, h   the skin's current rectangle, in Rainmeter's pixels (see the
+#                DPI note below: not always the screen's real pixels)
 #   minw, minh   smallest allowed size
 #   out    result file: "x y w h", or no file when cancelled (Esc, no change)
 #
@@ -52,13 +53,26 @@ public class ResizeGhost : System.Windows.Forms.Form {
 	}
 }
 public static class ResizeNative {
-	[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 	[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern short GetAsyncKeyState(int key);
+	[System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+	public static extern System.IntPtr FindWindow(string cls, string title);
+	[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern System.IntPtr GetWindowDpiAwarenessContext(System.IntPtr hWnd);
+	[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr ctx);
 }
 '@
-# Rainmeter positions skins in physical pixels; DPI awareness makes the cursor
-# position and the outline use the same pixels at any display scaling.
-[void][ResizeNative]::SetProcessDPIAware()
+# Same pixels as Rainmeter. Rainmeter 4.5 is not DPI-aware: at 125 % display
+# scaling Windows enlarges its windows and the skin's x, y, w, h are "virtual"
+# 96-dpi pixels, 1/1.25 of the real ones. This thread takes the DPI mode of a
+# Rainmeter skin window, so the cursor position and the outline use the same
+# virtual pixels as the request - and keep matching if a future Rainmeter
+# becomes DPI-aware. (Declaring this process DPI-aware, as the first version
+# did, mixed real and virtual pixels: the outline started in the wrong place
+# and the final size was off by the scaling factor.)
+# Windows 10 1607 or later; without a skin window nothing is changed.
+$rmWindow = [ResizeNative]::FindWindow('RainmeterMeterWindow', [NullString]::Value)
+if ($rmWindow -ne [IntPtr]::Zero) {
+	[void][ResizeNative]::SetThreadDpiAwarenessContext([ResizeNative]::GetWindowDpiAwarenessContext($rmWindow))
+}
 
 # New rectangle for the current mouse position: only the dragged sides move,
 # and they stop where the skin would become smaller than its minimum size.
