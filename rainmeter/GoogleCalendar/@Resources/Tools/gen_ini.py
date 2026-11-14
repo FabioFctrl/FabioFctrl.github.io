@@ -123,6 +123,16 @@ State=Hide
 OutputType=UTF8
 FinishAction=[!CommandMeasure MeasureScript "OnRunFinished()"]
 
+; Resize helper (Scripts\Resize.ps1), started by the handles of Resize.inc.
+; Separate from MeasureRun so a sync in progress never blocks a resize.
+[MeasureResize]
+Measure=Plugin
+Plugin=RunCommand
+Program=powershell.exe
+Parameter="-NoProfile -NonInteractive -STA -ExecutionPolicy Bypass -File "#@#Scripts\Resize.ps1" -Request "#@#Google\resize.txt""
+State=Hide
+FinishAction=[!CommandMeasure MeasureScript "OnResized()"]
+
 """)
 input_measure('InputTitle', 'title', IX, PY + 108, '(#Width#-56)')
 input_measure('InputDate', 'date', IX, PY + 164, HALF_W - 8)
@@ -363,5 +373,10 @@ for i in range(1, BUTTONS + 1):
       f"Hidden=1\nGroup=Panel\nLeftMouseUpAction={lua(f'Btn({i})')}\n\n")
     w(f"[BtnText{i}]\nMeter=String\nMeterStyle=StyleText\nX=({x}+{bw}/2)\nY={BTN_Y + BTN_H // 2}\nStringAlign=CenterCenter\n"
       f"FontSize=9\nText=\nHidden=1\nGroup=Panel\nLeftMouseUpAction={lua(f'Btn({i})')}\n\n")
+
+# --- resize handles: last, so they are drawn on top of everything (Resize.inc).
+# @Include must sit in a section; this one has no Meter= and is otherwise ignored.
+w("; ------------------------------------------------------- Resize handles --\n"
+  "[ResizeHandles]\n@Include3=#@#Resize.inc\n")
 
 open(sys.argv[1], 'w', encoding='ascii', newline='\r\n').write(''.join(out))

@@ -16,6 +16,7 @@ RefreshSeconds=60
 WeekStart=1
 
 ; Size (pixels). The total height depends on how many weeks the month spans.
+; Both are also set by dragging an edge or a corner of the widget.
 Width=380
 CellHeight=88
 

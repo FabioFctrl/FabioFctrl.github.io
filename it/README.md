@@ -3,6 +3,9 @@
 Widget per [Rainmeter](https://www.rainmeter.net/) (Windows) con la **vista mensile di Google Calendar e Google Tasks**:
 crea, completa ed elimina eventi e attività senza aprire il browser.
 
+Il repository contiene anche **Note adesive**, un secondo widget: post-it salvati come semplici file di testo sul tuo PC
+(vedi [Note adesive](#note-adesive)).
+
 🇬🇧 **English version:** [../README.md](../README.md)
 
 ![Rainmeter Calendar sul desktop](../docs/screenshot.png)
@@ -15,6 +18,7 @@ crea, completa ed elimina eventi e attività senza aprire il browser.
 - Clic su un giorno → elenco del giorno; clic su un elemento → dettaglio come su Google (orario, link Google Meet, luogo con link a Maps, calendario, chi l'ha creato, descrizione o note dell'attività) e **Apri**, **Elimina**, **Completa** (attività).
 - Pulsante **+** → nuovo evento (titolo, data, orario o tutto il giorno, calendario) o nuova attività (titolo, data, elenco).
 - Sincronizzazione automatica (ogni minuto di default) e pulsante **Aggiorna**.
+- Ridimensionabile come una finestra: trascina un bordo o un angolo (la dimensione viene salvata).
 - Interfaccia in italiano o inglese, facilmente traducibile.
 - Funziona solo sul tuo PC: parla direttamente con le API di Google, senza server intermedi.
 
@@ -44,7 +48,19 @@ rainmeter/GoogleCalendar/           la skin: copia questa cartella nella cartell
   @Resources/Scripts/GCal.lua       griglia, pannelli, modulo (file UTF-16 LE)
   @Resources/Scripts/gcal.ps1       accesso a Google e chiamate alle API
   @Resources/Tools/gen_ini.py       rigenera GoogleCalendar.ini
+  @Resources/Resize.inc             maniglie di ridimensionamento su bordi e angoli
+  @Resources/Scripts/Resize.ps1     segue il mouse durante il ridimensionamento
   @Resources/Google/                qui va client_secret.json (vedi sotto)
+rainmeter/Notes/                    skin Note adesive: copia anche questa cartella nella cartella Skins
+  Note01 ... Note12/Note.ini        una configurazione per finestra di nota (tutte uguali)
+  @Resources/NoteSkin.inc           la nota vera e propria, condivisa dalle 12 finestre
+  @Resources/Variables.inc          impostazioni: lingua, dimensione di default, carattere, colori
+  @Resources/Lang/en.inc, it.inc    testi dell'interfaccia
+  @Resources/Scripts/Notes.lua      logica della finestra (file UTF-16 LE)
+  @Resources/Scripts/NoteEditor.ps1 editor, rinomina ed eliminazione dei file delle note
+  @Resources/Resize.inc, Scripts/Resize.ps1   ridimensionamento, come nel calendario
+  @Resources/Notes/                 le tue note, un file <titolo>.txt ciascuna (non nel repository)
+  @Resources/Data/                  file di lavoro e note eliminate (non nel repository)
 ```
 
 ---
@@ -138,7 +154,7 @@ Tutte in `rainmeter/GoogleCalendar/@Resources/Variables.inc` (dopo la modifica: 
 | `Language` | `it` o `en` (file in `@Resources/Lang/`) |
 | `RefreshSeconds` | secondi tra una sincronizzazione automatica e l'altra, minimo e default `60` |
 | `WeekStart` | `1` = lunedì, `0` = domenica |
-| `Width`, `CellHeight` | dimensioni del widget in pixel |
+| `Width`, `CellHeight` | dimensioni del widget in pixel; si impostano anche trascinando un bordo o un angolo del widget |
 | `ColorMap`, `ColorMapTimed` | convertono i colori dell'API in quelli del sito (vedi sotto) |
 | `ColorTask`, `ColorTaskDone`, `ColorBirthday` | colori di attività e compleanni |
 
@@ -191,6 +207,47 @@ Ogni sincronizzazione avvia un breve processo PowerShell (circa un secondo di CP
 - Dopo aver modificato `gen_ini.py`: `python gen_ini.py ..\..\GoogleCalendar.ini` dalla cartella `@Resources/Tools`.
 - Per aggiungere una lingua: copia `Lang/en.inc` in `Lang/<codice>.inc`, traduci i valori (mantieni i segnaposto
   `%s`), salva in UTF-16 LE se contiene caratteri non ASCII, poi imposta `Language=<codice>`.
+- Ridimensionamento: Rainmeter sa solo spostare le skin, quindi gli ultimi meter di ogni skin sono maniglie invisibili
+  (`Resize.inc`) con i cursori di ridimensionamento di Windows. Premendone una parte `Resize.ps1`, che disegna un
+  contorno semitrasparente che segue il mouse; al rilascio lo script Lua della skin salva la nuova dimensione e
+  aggiorna la skin una volta. `Resize.inc` e `Resize.ps1` sono identici nelle due skin, così ogni cartella resta
+  autonoma.
+
+---
+
+## Note adesive
+
+Un secondo widget, indipendente: post-it sul desktop salvati come semplici file di testo sul tuo PC. Nessun account,
+nessun cloud, niente da configurare.
+
+- **Riga del titolo** sotto la barra: cliccala per rinominare la nota. Il titolo è il nome del file in
+  `@Resources/Notes` (`Lista spesa` → `Lista spesa.txt`). I caratteri che Windows o Rainmeter non accettano nei nomi
+  dei file (`\ / : * ? " < > | # [ ] %`) vengono tolti; un titolo già usato diventa ` (2)`.
+- **Testo**: cliccalo per scrivere. `Invio` va a capo; il testo si salva da solo mentre scrivi; per finire clicca
+  da qualsiasi altra parte, `Esc` o `Ctrl+S`. Passare a un'altra app per copiare qualcosa non fa perdere nulla.
+- **Barra**: ≡ elenco delle note (le 12 modificate più di recente; clic per aprirne una in una nuova finestra),
+  **+** nuova nota, colore, cestino (elimina la nota; una copia resta in `@Resources/Data/Deleted`), × chiude la
+  finestra (la nota resta nell'elenco). L'ultima finestra aperta non si può chiudere: la × sparisce e il cestino la
+  svuota.
+- Fino a 12 note aperte insieme, quante note vuoi nella cartella.
+- Ogni finestra si ridimensiona trascinando un bordo o un angolo e conserva la propria dimensione.
+- Le note sono normali file `.txt` UTF-8: puoi aprirle, modificarle o copiarle con qualsiasi programma, e il widget
+  mostra le modifiche fatte altrove entro 2 secondi.
+
+**Installazione.** Copia `rainmeter/Notes` nella cartella delle skin di Rainmeter (come per il calendario),
+Rainmeter → **Gestisci** → **Aggiorna tutto** → `Notes` → `Note01` → `Note.ini` → **Carica**. Le altre finestre le
+apre il widget stesso (**+** e l'elenco ≡). Lingua e dimensione di default sono in `@Resources/Variables.inc`
+(`Language=it` / `en`, `NoteWidth`, `NoteHeight`, carattere e colori).
+
+**Privacy.** Le note non lasciano mai il tuo PC: il widget non usa la rete. In questo repository `.gitignore`
+esclude `rainmeter/Notes/@Resources/Notes` e `@Resources/Data`, così le note non finiscono mai in un commit per errore.
+
+**Limiti noti.**
+- Se rinomini il file di una nota in Esplora file mentre la nota è aperta, la finestra la mostra vuota; scrivendoci
+  si ricrea il file con il vecchio titolo. Rinomina dalla riga del titolo, oppure chiudi prima la finestra.
+- Il Lua di Rainmeter non riesce ad aprire file con lettere accentate nel nome, quindi scritture, rinomine ed
+  eliminazioni passano da `NoteEditor.ps1` (Windows PowerShell), e la skin legge i file con le misure WebParser e
+  FileView di Rainmeter, che gestiscono qualsiasi nome. `Notes.lua` deve restare in UTF-16 LE, come `GCal.lua`.
 
 ## Licenza
 

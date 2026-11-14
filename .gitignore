@@ -1,10 +1,24 @@
-# Repository PUBBLICO: credenziali e dati personali non devono mai finirci.
-# client_secret*.json  client OAuth Google (si copia a mano tra i PC)
-# token.dat            refresh token cifrato con DPAPI (valido solo sul PC che l'ha creato)
-# data.tsv, request.txt  eventi/attivita' scaricati e ultima richiesta del widget
+# PUBLIC repository: credentials and personal data must never end up here.
+
+# Rainmeter Calendar, files in @Resources/Google:
+#   client_secret*.json   Google OAuth client (copied by hand between PCs)
+#   token.dat             refresh token encrypted with DPAPI (valid only on the PC that created it)
+#   data.tsv, request.txt events/tasks downloaded and the widget's last request
+#   last-error.txt        last error of gcal.ps1
+#   resize.txt/.out       request/result of the resize helper
 **/Google/client_secret*.json
 **/Google/token.dat
 **/Google/data.tsv
 **/Google/data.tsv.tmp
 **/Google/request.txt
 **/Google/last-error.txt
+**/Google/resize.txt
+**/Google/resize.out
+
+# Sticky Notes: your notes (@Resources/Notes) and the widget's run-time files
+# (@Resources/Data: titles shown by each window, colours, deleted notes) stay
+# on your PC. Only the empty folders are kept, the skin needs them on first start.
+rainmeter/Notes/@Resources/Notes/*
+!rainmeter/Notes/@Resources/Notes/.gitkeep
+rainmeter/Notes/@Resources/Data/*
+!rainmeter/Notes/@Resources/Data/.gitkeep
